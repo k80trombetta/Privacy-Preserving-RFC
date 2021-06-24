@@ -6,9 +6,15 @@ Created on Tue Jun 15 21:09:35 2021
 @author: trombettak
 """
 
+
 #Dependencies
 import pandas as pd
+import numpy as np
+
 from sklearn.model_selection import train_test_split
+
+# Used for finding most predicted labels from multiple parents
+from collections import Counter
 
 # This was imported for the random forest classifier which did much better.
 from sklearn.ensemble import RandomForestClassifier
@@ -33,65 +39,102 @@ df
 
 
 
-# Split the data with 80% for training and 20% for testing
+# Class to represent all teachers' and student data, models, and predictions
+class ModelData:
+  def __init__(self, train, test, train_classes, test_classes):
+    self.train = train
+    self.test = test
+    self.train_classes = train_classes
+    self.test_classes = test_classes
+    self.model = None
+    self.prediction = None
+    
+    
+    
+    
+
+# Split the data into train and test for teacher and student data sets
+def create_split_data(dataSet, dataSetType, testSize):
+  train, test = train_test_split(dataSet, test_size=testSize)
+  train = train.reset_index(drop=True)
+  test = test.reset_index(drop=True)
+  if dataSetType == "Student" and len(train.index) != len(test.index):
+    test = test[:-1] 
+  train_classes = train.iloc[:,15].tolist()
+  test_classes = test.iloc[:,15].tolist()
+  train = train.drop(labels='class', axis=1)
+  test = test.drop(labels='class', axis=1)
+  return ModelData(train, test, train_classes, test_classes)
+
+# Split the data with 80% for teachers and 20% for student
 teacher, student = train_test_split(df, test_size=0.2)
 
-# Split the teacher data with 80% for training and 20% for testing
-teacher_train, teacher_test = train_test_split(teacher, test_size=0.2)
+# Split the teacher into 4 sub-teachers
+t1, t2, t3, t4 = np.array_split(teacher, 4)
+teachers = [t1, t2, t3, t4]
 
-# Split the student data with 50% for training and 50% for testing
-student_train, student_test = train_test_split(student, test_size=0.5)
+# Split the teacher data into 4 subsets, and create ModelData class instance for each teacher
+for teacher in range(len(teachers)):
+  teachers[teacher] = create_split_data(teachers[teacher], "Teacher", 0.2)
 
-# Reindex data after train_test_split's random removal of indices in all sets, leaving gaps
-teacher_train = teacher_train.reset_index(drop=True)
-teacher_test = teacher_test.reset_index(drop=True)
-student_train = student_train.reset_index(drop=True)
-student_test = student_test.reset_index(drop=True)
+# Split the student data and create ModelData class instance for the student
+student = create_split_data(student, "Student", 0.5)
 
-if len(student_train.index) != len(student_test.index):
-  student_test = student_test[:-1]
-
-# Partition of data is now
-# teacher_train = 64%, teacher_test = 16%
-# student_train = 10%, student_test = 10%
-
-
-
-
-# Save elements in all data sets' "class" columns to lists for future reference
-teacher_train_classes = teacher_train.iloc[:,15].tolist()
-teacher_test_classes = teacher_test.iloc[:,15].tolist()
-student_train_classes = student_train.iloc[:,15].tolist()
-student_test_classes = student_test.iloc[:,15].tolist()
-
-# Drop "class" column from both train and test data
-teacher_train = teacher_train.drop(labels='class', axis=1)
-teacher_test = teacher_test.drop(labels='class', axis=1)
-student_train = student_train.drop(labels='class', axis=1)
-student_test = student_test.drop(labels='class', axis=1)
+# # Partition of data is now
+# # teachers = [ {16%, 4%}, {16%, 4%}, {16%, 4%}, {16%, 4%} ]
+# # student = {10%, 10%}
 
 
 
 
 # Train teacher on data using random forest classifier.
 
-teacher_clf = RandomForestClassifier(random_state=0)
-teacher_clf.fit(teacher_train, teacher_train_classes)
-teacher_rf_predicted_classes = teacher_clf.predict(teacher_test)
+for teacher in range(len(teachers)):
+  teacher_clf = RandomForestClassifier(random_state=0)
+  teacher_clf.fit(teachers[teacher].train, teachers[teacher].train_classes)
+  teachers[teacher].model = teacher_clf
+  teachers[teacher].prediction = teacher_clf.predict(teachers[teacher].test)
+  teacher_rf_accuracy = sum(1 for x,y in zip(teachers[teacher].prediction, teachers[teacher].test_classes) if x == y) / len(teachers[teacher].prediction)
+  print(f"\nTeacher #{teacher + 1} Accuracy: {teacher_rf_accuracy}")
+  
+  
+  
+  
+  # Predict classes of student train data using each teacher
 
-teacher_rf_accuracy = sum(1 for x,y in zip(teacher_rf_predicted_classes,teacher_test_classes) if x == y) / len(teacher_rf_predicted_classes)
-print(f"Teacher Random Forest Accuracy: {teacher_rf_accuracy}")
+# Holds each 4 parents' predictions on student train data
+teacherPredictionsForStudent = []
+for teacher in range(len(teachers)):
+  teacherPredictionsForStudent.append(teachers[teacher].model.predict(student.train))
 
+# Holds element-wise most predicted labels from 4 parents' predictions on student train data
+mostPredicted = []
+for prediction in range(len(teacherPredictionsForStudent[0])):
+  mode = Counter([teacherPredictionsForStudent[0][prediction], teacherPredictionsForStudent[1][prediction],
+            teacherPredictionsForStudent[2][prediction], teacherPredictionsForStudent[3][prediction]]).most_common(1)[0][0]
+  mostPredicted.append(mode)
 
+sensitivity = 0.1
+epsilon = 0.3
+print(mostPredicted)
+noise = np.random.laplace()
+mostPredicted = [round(x + 1) for x in mostPredicted]
+print(noise)
+print(mostPredicted)
 
-
-# Predict classes of student_train
-student_rf_predicted_classes = teacher_clf.predict(student_train)
-
-# Train student model using predicted labels from teacher model
+# Train student model using most predicted labels from teacher models
 student_clf = RandomForestClassifier(random_state=0)
-student_clf.fit(student_train, student_rf_predicted_classes)
-student_rf_predicted_classes = student_clf.predict(student_test)
+student_clf.fit(student.train, mostPredicted)
+student_rf_predicted_classes = student_clf.predict(student.test)
 
-student_rf_accuracy = sum(1 for x,y in zip(student_rf_predicted_classes,student_test_classes) if x == y) / len(student_rf_predicted_classes)
-print(f"Student Random Forest Accuracy: {student_rf_accuracy}")
+student_rf_accuracy = sum(1 for x,y in zip(student_rf_predicted_classes,student.test_classes) if x == y) / len(student_rf_predicted_classes)
+print(f"Student Accuracy: {student_rf_accuracy}")
+
+
+
+
+
+    
+    
+    
+    
