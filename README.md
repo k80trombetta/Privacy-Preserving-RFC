@@ -1,6 +1,3 @@
-# ML_private_network_data
-Machine learning model uses differential privacy on network traffic data set
-
 # Privacy Preserving RFC
 
 Privacy Preserving RFC builds and tests a machine learning model that uses differntial privacy and inspiration from the PATE model (https://arxiv.org/abs/1802.08908) to make predictions about network traffic data, while preserving data privacy. The implementation uses Scikit-Learn's Random Forest Classifier and tests various configured models to find which model consistently makes predictions with the highest accuracy.
