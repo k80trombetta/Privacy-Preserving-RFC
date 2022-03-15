@@ -4,6 +4,6 @@ Privacy Preserving RFC builds and tests a machine learning model that uses diffe
 
 # Research
 
-I wrote the first draft of an academic research paper with intention to continue future drafts and submit to machine learning conferences for publishing. The paper documents the project purpose, details, and results. 
+I wrote the first draft of an academic research paper with intention to continue future drafts/editing and submit to machine learning conferences for publishing. The paper documents the project purpose, details, and results. 
 
 https://docs.google.com/document/d/1OfKujjr2bnezikw3YKO2Hlacu3uM4lMOkghuCKcS-Go/edit
